@@ -1,0 +1,6 @@
+{
+  "name": "Client Request Desk",
+  "description": "Multi-tenant client request and work order desk for local service businesses with workspace isolation, human-confirmed conversion, activity timeline, and simulated assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
