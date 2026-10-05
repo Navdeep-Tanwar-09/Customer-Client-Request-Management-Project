@@ -43,43 +43,95 @@ npm run test:api
 
 The API suite checks read routes, authentication and tenant boundaries, error responses, and invalid writes. It uses rejected writes and verifies records remain unchanged.
 
-### Production mode
+## Architecture
 
-Set a fresh `JWT_SECRET` of at least 32 characters and `NODE_ENV=production`, build the frontend, then start the server:
+The application follows a **single-process, full-stack architecture** consisting of a React frontend, Express.js backend, and SQLite database. The system is designed around **workspace isolation, role-based access, validated business workflows, and audit logging**.
 
-```bash
-npm run build
-NODE_ENV=production npm start
-```
+### Frontend
 
-PowerShell:
+The frontend is a single-page React application with role-based navigation and centralized state management.
 
-```powershell
-$env:NODE_ENV = 'production'
-npm run build
-npm start
-```
+- `App.tsx` manages authentication state, workspace context, requests, filters, selections, and modals.
+- JWT sessions are restored on application startup.
+- **Customer mode:** Create requests and track their status.
+- **Workplace mode:** Review requests, update statuses, convert qualified requests into work items, and view activity history.
+- `api.ts` provides a centralized API client for communication with the backend.
 
-Configure `PORT` to change the listener port and `DATABASE_FILE` to choose the SQLite file. Keep the database on persistent storage. `npm run seed` is destructive: it drops existing tables and recreates demo data.
+### Backend
 
-## Architecture and decisions
+The Express backend is organized by business responsibility:
 
-- **Frontend:** React and TypeScript, built with Vite and served by the Express app in production.
-- **API:** Express JSON routes with JWT authentication, role checks, workspace scoping, and parameterized SQL.
-- **Storage:** Node's synchronous SQLite API keeps local setup simple and provides transactions for request, audit, and conversion writes. It assumes a single application instance and local database file.
-- **Assistant:** Rule-based suggestions rather than an external AI service. Suggestions require explicit user confirmation before writes.
-- **Demo accounts:** Seed data and the demo-account endpoint make evaluation easy, but are not suitable for an internet-facing deployment.
+| Module         | Responsibility                                                |
+| -------------- | ------------------------------------------------------------- |
+| `server.ts`    | Express bootstrap, middleware, API mounting, frontend serving |
+| `auth.ts`      | JWT authentication, workspace isolation, role authorization   |
+| `requests.ts`  | Request creation, listing, validation, and status transitions |
+| `workItems.ts` | Request-to-work-item conversion and transactional updates     |
+| `activity.ts`  | Activity timeline and audit logging                           |
+| `assistant.ts` | Deterministic rule-based recommendations                      |
+
+Each protected operation follows the pattern:
+
+**Authentication → Authorization → Validation → Business Logic → Database Mutation**
+
+### Data & Persistence
+
+The database schema is defined in `schema.ts` and follows a normalized, workspace-scoped data model:
+
+- `workspaces` — tenant/workspace information
+- `users` — workplace and customer accounts
+- `requests` — customer requests associated with a workspace
+- `work_items` — qualified requests converted into actionable work
+- `activity_log` — audit history and workflow events
+
+`database.ts` manages SQLite connections, schema migrations, and initial demo-data seeding.
+
+### Security & Business Rules
+
+The application enforces security and workflow constraints at the API layer:
+
+- JWT authentication for protected endpoints
+- Workspace-level tenant isolation
+- Role-based authorization (`WORKPLACE` / `CUSTOMER`)
+- Validated request bodies before database mutations
+- Controlled request status transitions
+- Work-item conversion restricted to `QUALIFIED` requests
+- Transactional updates for critical workflow operations
+- Persistent activity logging for auditability
+
+### Architectural Rationale
+
+A single-process architecture was chosen to keep deployment and maintenance simple while providing clear separation between presentation, API, business logic, and persistence.
+
+**Advantages**
+
+- Simple deployment and local development
+- Minimal infrastructure requirements
+- Easy-to-follow business workflows
+- SQLite provides lightweight persistent storage
+- Strong validation and workspace isolation
+
+**Trade-off:** The architecture is optimized for an internal tool or small-team deployment rather than horizontally scaled, high-volume SaaS workloads.
+
+### Core Design Principle
+
+> **Workspace-scoped business workflows with strict validation, role separation, controlled state transitions, and auditability.**
 
 ## Assumptions and trade-offs
 
-The app prioritizes a quick, self-contained evaluation setup over distributed scale. SQLite and synchronous queries are appropriate for a small single-instance deployment, not multi-replica workloads. Demo credentials, simplified roles, and unpaginated areas are convenience choices, not production security or scalability guarantees.
+The architecture is optimized for an internal tool or small-team deployment rather than horizontally scaled, high-volume SaaS workloads. SQLite and synchronous queries are appropriate for a small single-instance deployment, not multi-replica workloads. 
 
 ## Improvements with more time
 
-- Remove public demo credentials and add login rate limiting.
+- Add login rate limiting.
 - Add pagination, request-size limits, and broader backend integration tests.
 - Move to PostgreSQL with migrations and tenant row-level policies for multi-instance deployment.
 - Add operational monitoring, backups, and deployment-specific secret management.
+- Add caching with Redis for frequently accessed data and rate-limiting support.
+- Add automated database backups, recovery procedures, and deployment-specific secret management.
+- Add API documentation with OpenAPI/Swagger and standardized API response formats.
+- Add email/in-app notifications for request creation, status changes, and work-item completion.
+- Add real-time request and status updates using WebSockets or Server-Sent Events.
 
 ## AI tools and review
 
